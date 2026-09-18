@@ -65,10 +65,10 @@ A fixture, once per test project:
 ```csharp
 public sealed class Fixture() : ServiceTestFixture(new ServiceTestOptions
 {
-    MockServer = true,                                    // wait, reset once, then load MockServerFiles
-    MockServerFiles = ["mockserver/market-mapper.json"],  // loaded before the health wait
-    DefaultScopes = "bonus-r:{{brand}} bonus-w",          // sent as auth-claim-scopes (tokens expand)
-    Features = [new RedisFeature(publish: ["ebets"], record: ["bonus-awarded"])],
+    MockServer = true,                                     // wait, reset once, then load MockServerFiles
+    MockServerFiles = ["mockserver/pricing-service.json"], // loaded before the health wait
+    DefaultScopes = "orders-r:{{brand}} orders-w",         // sent as auth-claim-scopes (tokens expand)
+    Features = [new RedisFeature(publish: ["orders"], record: ["order-shipped"])],
 });
 
 [CollectionDefinition(nameof(ServiceTestCollection))]
@@ -79,23 +79,63 @@ A scenario:
 
 ```csharp
 [Fact]
-public Task bonus_created_then_listed() =>
+public Task order_created_then_listed() =>
     fixture.Scenario()
-        .When(Http.Post("v1/bonus/{{brand}}", "cases/bonus/odds-boost.json"))
-        .Capture("bonusId", "$")
-        .Then(Http.Get("v1/bonus/{{brand}}/{{bonusId}}").Matches("""{ "type": "OddsBoost" }"""))
+        .When(Http.Post("v1/orders/{{brand}}", "cases/orders/create.json"))
+        .Capture("orderId", "$")
+        .Then(Http.Get("v1/orders/{{brand}}/{{orderId}}").Matches("""{ "status": "Pending" }"""))
         .RunAsync();
 
 [Fact]
-public Task settled_bet_pays_reward() =>
+public Task order_shipped_notifies_customer() =>
     fixture.Scenario()
-        .Given(Mock.Post("/customertransactions/v1/transactions/{{customerId}}/reward/deposit"))
-        .When(Streams.Publish("ebets", "cases/settlement/odds-boost-win.json",
-            type: typeof(EnrichedBet).FullName, key: "{{betId}}"))
-        .Then(Mock.Received("POST", "/customertransactions/v1/transactions/{{customerId}}/reward/deposit",
-            """{ "amount": 2.5 }"""))
+        .Given(Mock.Post("/notifications/v1/send/{{customerId}}"))
+        .When(Streams.Publish("orders", "cases/orders/shipped.json",
+            type: typeof(OrderShipped).FullName, key: "{{orderId}}"))
+        .Then(Mock.Received("POST", "/notifications/v1/send/{{customerId}}",
+            """{ "template": "OrderShipped" }"""))
         .RunAsync();
 ```
+
+### A more complete example: several mocks, a capture, and a stream check
+
+Given\* steps aren't limited to one mock, and a scenario can check several things about the same trigger — here a
+checkout charges a payment gateway, reserves stock, and its own status flips once both finish:
+
+```csharp
+[Fact]
+public Task checkout_charges_payment_and_reserves_stock() =>
+    fixture.Scenario()
+        .Given(Mock.Post("/payments/v1/charge/{{customerId}}", """{ "status": "Approved" }"""))
+        .Given(Mock.Post("/inventory/v1/reserve", requestBody: """{ "sku": "{{sku}}" }"""))
+        .When(Http.Post("v1/checkout/{{brand}}", "cases/checkout/cart.json"))
+        .Capture("orderId", "$.orderId")
+        .Then(Http.Get("v1/orders/{{brand}}/{{orderId}}").Matches("""{ "status": "Paid" }"""))
+        .Then(Mock.Received("POST", "/payments/v1/charge/{{customerId}}", """{ "amount": 49.99 }"""))
+        .Then(Mock.Received("POST", "/inventory/v1/reserve", """{ "sku": "{{sku}}" }"""))
+        .RunAsync();
+```
+
+### Redis Streams (`Scenarify.Redis`)
+
+Seed Redis state with a `Given`, trigger over HTTP or by publishing a message, then assert on a message a downstream
+consumer published — `Streams.Published<T>` waits for a subset match, the same way `Mock.Received` does for HTTP:
+
+```csharp
+[Fact]
+public Task order_shipped_reserves_stock() =>
+    fixture.Scenario()
+        .Given(Redis.Set("inventory:{{sku}}", """{ "quantity": 10 }"""))
+        .When(Streams.Publish("orders", "cases/orders/shipped.json",
+            type: typeof(OrderShipped).FullName, key: "{{orderId}}"))
+        .Then(Streams.Published<StockReserved>("inventory-events",
+            """{ "sku": "{{sku}}", "quantity": 1 }"""))
+        .RunAsync();
+```
+
+`Redis.Set/HashSet/SortedSetAdd/JsonSet` are discouraged outside cases like this one, where nothing else can reach the
+state a test needs to seed — prefer driving setup through the API or an event. Seeded keys expire after
+`RedisFeature(seedTtl:)` (10 minutes by default) so a forgotten write doesn't linger.
 
 ### Mixing C# values with tokens
 
@@ -105,16 +145,16 @@ braces. Use `Json.Format` instead: write the template with tokens only, pass the
 before the scenario's own variables):
 
 ```csharp
-Json.Format("""{ "jobId": "{{jobId}}", "selectionId": "{{n}}", "status": "{{status}}" }""",
-    new { jobId = Json.Token($"job{n}"), n, status })
+Json.Format("""{ "jobId": "{{jobId}}", "attempt": "{{attempt}}", "status": "{{status}}" }""",
+    new { jobId = Json.Token($"job{n}"), attempt = n, status })
 ```
 
 Or `.With(name, value)` when the value belongs to the whole scenario rather than one body — tokens inside the value
 still expand when it's used:
 
 ```csharp
-.With("selections", placings.Select((place, i) => new { id = $"{i + 1}", place, timeStampUtc = "{{now}}" }))
-.When(PublishResult("""{ "selectionResults": "{{selections}}" }"""))
+.With("lineItems", items.Select((item, i) => new { id = $"{i + 1}", item, addedAtUtc = "{{now}}" }))
+.When(PublishOrder("""{ "lineItems": "{{lineItems}}" }"""))
 ```
 
 ### Checks
