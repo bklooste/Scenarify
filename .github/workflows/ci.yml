@@ -36,7 +36,7 @@ jobs:
           --logger "trx"
           --results-directory TestResults
 
-      - name: Service tests (Testcontainers: Redis, MockServer)
+      - name: "Service tests (Testcontainers: Redis, MockServer)"
         run: >
           dotnet test Scenarify.slnx -c Release --no-build
           --filter "TestType=ServiceTest"
