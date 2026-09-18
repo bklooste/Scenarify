@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <Description>Given/When/Then scenario testing for xUnit v3 service tests: JSON matching with token
+            expansion, MockServer stubs, and a ServiceTestFixture for spinning up the service under test.</Description>
+        <PackageTags>xunit;testing;integration-testing;json;mockserver;scenario-testing</PackageTags>
+    </PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.1" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.1" />
+		<PackageReference Include="MockServerClientNet" Version="2.2.2" />
+		<!-- Not the xunit.v3 metapackage: that makes this library a test executable. -->
+		<PackageReference Include="xunit.v3.extensibility.core" Version="1.0.0" />
+		<PackageReference Include="xunit.v3.assert" Version="1.0.0" />
+	</ItemGroup>
+</Project>

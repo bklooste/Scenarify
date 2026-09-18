@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore Scenarify.slnx
+
+      - name: Build
+        run: dotnet build Scenarify.slnx -c Release --no-restore
+
+      - name: Unit tests
+        run: >
+          dotnet test Scenarify.slnx -c Release --no-build
+          --filter "TestType=UnitTest"
+          --logger "trx"
+          --results-directory TestResults
+
+      - name: Service tests (Testcontainers: Redis, MockServer)
+        run: >
+          dotnet test Scenarify.slnx -c Release --no-build
+          --filter "TestType=ServiceTest"
+          --logger "trx"
+          --results-directory TestResults
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          retention-days: 7
+
+  publish:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore Scenarify.slnx
+
+      - name: Pack Scenarify
+        run: >
+          dotnet pack src/Scenarify/Scenarify.csproj
+          -c Release --no-restore -o nupkgs
+
+      - name: Pack Scenarify.Redis
+        run: >
+          dotnet pack src/Scenarify.Redis/Scenarify.Redis.csproj
+          -c Release --no-restore -o nupkgs
+
+      - name: NuGet login (OIDC -> temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: bklooste
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push "nupkgs/*.nupkg"
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+      - name: Record published version
+        id: version
+        run: |
+          pkg=$(ls nupkgs/Scenarify.[0-9]*.nupkg | head -1)
+          version=$(basename "$pkg" .nupkg | sed 's/^Scenarify\.//')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "### Published Scenarify \`v$version\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          ls nupkgs/*.nupkg | xargs -n1 basename | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tag release
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists, skipping"
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists, skipping"
+          else
+            gh release create "$tag" nupkgs/*.nupkg \
+              --title "$tag" \
+              --generate-notes
+          fi

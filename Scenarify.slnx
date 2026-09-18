@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Scenarify/Scenarify.csproj" />
+    <Project Path="src/Scenarify.Redis/Scenarify.Redis.csproj" />
+  </Folder>
+  <Folder Name="/tst/">
+    <Project Path="tst/Scenarify.UnitTests/Scenarify.UnitTests.csproj" />
+    <Project Path="tst/Scenarify.Redis.Tests/Scenarify.Redis.Tests.csproj" />
+  </Folder>
+</Solution>

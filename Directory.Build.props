@@ -1,0 +1,26 @@
+<Project>
+
+	<PropertyGroup>
+		<Authors>Ben Klooste</Authors>
+		<Copyright>Copyright (c) 2026 Ben Klooste</Copyright>
+		<PackageProjectUrl>https://github.com/bklooste/Scenarify</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/bklooste/Scenarify</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<!-- Every push to main auto-publishes a new patch version, so a per-version blurb here would go
+		     stale on the very next unrelated commit. CHANGELOG.md is the real notes, updated only when
+		     something notable ships; nuget.org's Release Notes just point at it. -->
+		<PackageReleaseNotes>https://github.com/bklooste/Scenarify/blob/main/CHANGELOG.md</PackageReleaseNotes>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Nerdbank.GitVersioning" Version="3.10.94" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.401" PrivateAssets="all" />
+	</ItemGroup>
+
+</Project>
