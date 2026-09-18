@@ -23,7 +23,7 @@ public sealed class Containers : IAsyncLifetime
         .WithWaitStrategy(Wait.ForUnixContainer().UntilExternalTcpPortIsAvailable(6379))
         .Build();
 
-    private readonly IContainer mockServer = new ContainerBuilder("ghcr.io/bklooste/mockserver:mockserver-5.15.0")
+    private readonly IContainer mockServer = new ContainerBuilder("mockserver/mockserver:5.15.0")
         .WithCommand("-serverPort", "1090", "-logLevel", "WARN")
         .WithPortBinding(1090, assignRandomHostPort: true)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilExternalTcpPortIsAvailable(1090))
