@@ -62,6 +62,19 @@ public sealed record ServiceTestOptions
     /// </summary>
     public bool SendIdentityHeaders { get; init; } = true;
 
+    /// <summary>
+    /// False for services with no HTTP listener (workers). With no <see cref="Readiness"/> probe the fixture then skips
+    /// the HTTP wait entirely, and <see cref="StandardApiTests"/> skips its health/API-document assertions.
+    /// </summary>
+    public bool ServesHttp { get; init; } = true;
+
+    /// <summary>
+    /// Replaces the HTTP health poll for the service under test (features have already started). Null (default) polls
+    /// <see cref="HealthPath"/> when <see cref="ServesHttp"/>, otherwise waits for nothing. Other <see cref="Services"/>
+    /// are still health-checked.
+    /// </summary>
+    public IReadinessProbe? Readiness { get; init; }
+
     /// <summary>Path polled until it returns 200.</summary>
     public string HealthPath { get; init; } = "health";
 
@@ -215,9 +228,24 @@ public abstract class ServiceTestFixture : IAsyncLifetime
         foreach (var feature in Options.Features)
             await feature.StartAsync(this, cts.Token);
 
-        await Task.WhenAll(otherClients.Values.Prepend(Clients).Select(clients => WaitHealthyAsync(clients, cts.Token)));
+        var waits = otherClients.Values.Select(clients => WaitHealthyAsync(clients, cts.Token)).ToList();
+        if (Options.Readiness is { } probe)
+            waits.Add(WaitReadyAsync(probe, cts.Token));
+        else if (Options.ServesHttp)
+            waits.Add(WaitHealthyAsync(Clients, cts.Token));
+        await Task.WhenAll(waits);
 
         Log($"Ready in {watch.Elapsed.TotalSeconds:0.0}s");
+    }
+
+    private Task WaitReadyAsync(IReadinessProbe probe, CancellationToken ct)
+    {
+        Log("Waiting for readiness probe");
+        return Eventually.Assert(async () =>
+        {
+            if (!await probe.IsReadyAsync(this, ct))
+                throw new InvalidOperationException("readiness probe reported not ready");
+        }, Options.StartupTimeout, "service ready (readiness probe)");
     }
 
     private Task WaitHealthyAsync(TestClients clients, CancellationToken ct)

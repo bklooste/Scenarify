@@ -21,12 +21,14 @@ namespace Scenarify;
 public static class StandardApiTests
 {
     /// <summary>
-    /// Runs the standard checks against the fixture's service and every service named in
+    /// No-op when <see cref="ServiceTestOptions.ServesHttp"/> is false (workers). Runs the standard checks against the fixture's service and every service named in
     /// <see cref="ServiceTestOptions.Services"/> (e.g. a second replica). Use when those services are the same app.
     /// </summary>
     public static async Task RunAll(ServiceTestFixture fixture)
     {
         ArgumentNullException.ThrowIfNull(fixture);
+        if (!fixture.Options.ServesHttp)
+            return;
         await Run(fixture.BaseUrl);
         foreach (var name in fixture.Options.Services.Keys)
             await Run(fixture.ClientsFor(name).BaseAddress.ToString());
@@ -36,7 +38,7 @@ public static class StandardApiTests
     public static Task Run(ServiceTestFixture fixture, params string[]? moreUrls)
     {
         ArgumentNullException.ThrowIfNull(fixture);
-        return Run(fixture.BaseUrl, moreUrls);
+        return fixture.Options.ServesHttp ? Run(fixture.BaseUrl, moreUrls) : Task.CompletedTask;
     }
 
     /// <summary>
@@ -46,7 +48,7 @@ public static class StandardApiTests
     public static Task RunWithDocument(ServiceTestFixture fixture, string? documentPath, params string[]? moreUrls)
     {
         ArgumentNullException.ThrowIfNull(fixture);
-        return Run(fixture.BaseUrl, documentPath, moreUrls);
+        return fixture.Options.ServesHttp ? Run(fixture.BaseUrl, documentPath, moreUrls) : Task.CompletedTask;
     }
 
     /// <summary>Runs the standard checks against <paramref name="baseUrl"/>: health (HTTP/1 and HTTP/2) and swagger.</summary>

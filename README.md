@@ -137,6 +137,23 @@ public Task order_shipped_reserves_stock() =>
 state a test needs to seed — prefer driving setup through the API or an event. Seeded keys expire after
 `RedisFeature(seedTtl:)` (10 minutes by default) so a forgotten write doesn't linger.
 
+### Workers with no HTTP listener
+
+By default the fixture polls `GET {SvcHttpUrl}/health`. For a worker, say so and (optionally) supply a readiness probe:
+
+```csharp
+new ServiceTestOptions
+{
+    ServesHttp = false,   // no /health wait; StandardApiTests becomes a no-op
+    Readiness = ReadinessProbe.PublishAndObserve(
+        publish: (f, ct) => PublishPing(f, ct),          // repeated each attempt
+        observe: (f, ct) => PingWasHandled(f, ct)),      // true once the effect is seen
+}
+```
+
+`ReadinessProbe.From(...)` wraps any check, `ReadinessProbe.None` skips waiting, or implement `IReadinessProbe`. A probe
+runs after features start and is retried until `StartupTimeout`; other `Services` are still health-checked.
+
 ### Mixing C# values with tokens
 
 Tokens use `{{name}}`, and so does C# raw-string interpolation — a `$$"""` string reads `{{customerId}}` as a C#
