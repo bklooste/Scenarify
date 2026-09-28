@@ -19,6 +19,11 @@ You can, and Scenarify doesn't stop you (see "Escape hatches" below) — but mos
 
 - **No `Task.Delay`.** Every step that waits (`Mock.Received`, `Streams.Published`, `.Eventually()`) polls with a
   real timeout and reports the *last actual failure*, not a generic "still false after N tries."
+- **A broken dependency costs one timeout, not one per wait.** When three waits in a row each burn their full
+  timeout, the environment is down rather than slow, and the waits after them fail immediately instead of each
+  spending another 30s to learn the same thing — the difference between a two-minute red build and a forty-minute
+  one. A success clears the count, and a deliberately fast negative test never trips it. Tune with
+  `Eventually.ConsecutiveTimeoutLimit` / `EVENTUALLY_TIMEOUT_LIMIT`, or set it to 0 to poll every time.
 - **JSON checks that don't fight you.** Subset matching by default (`Matches`), matcher tokens for the values you
   don't control (`{{any:guid}}`, `{{any:datetime}}`, `{{contains:text}}`, `{{absent}}`), and a failure message that
   lists every mismatched path before printing the whole body — not just "expected true, got false."
