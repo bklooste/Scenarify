@@ -8,11 +8,6 @@ Given\*/When/Then+ scenario testing for xUnit v3 service tests: JSON matching wi
 stubs, a `ServiceTestFixture` that spins up the service under test, and (via the `Scenarify.Redis` add-on) steps for
 asserting on and publishing Redis Streams messages.
 
-Scenarify grew out of a betting platform's own service-test suite: about 590 tests that hit real HTTP services and
-MockServer over Docker Compose, most sharing one shape — an optional setup step, a trigger, and a JSON check — but
-each hand-rolled with its own polling helper, its own stream publisher, and its own JSON-diffing code. Scenarify is
-that shape, extracted.
-
 ## Why not just write the HTTP calls directly?
 
 You can, and Scenarify doesn't stop you (see "Escape hatches" below) — but most service tests don't need to:
@@ -232,6 +227,9 @@ src/Scenarify.Redis/   Redis Streams add-on: StreamSender/StreamRecorder, RedisF
 tst/Scenarify.UnitTests/       Fast unit tests (TestType=UnitTest) — no Docker required
 tst/Scenarify.Redis.Tests/     Testcontainers tests against real Redis + MockServer (TestType=ServiceTest)
 ```
+## Expansion
+
+EventHub and Kafka can be added
 
 ## Building & testing
 
