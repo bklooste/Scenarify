@@ -60,23 +60,40 @@ public static class Eventually
     public static void ResetFailureCount() => Interlocked.Exchange(ref consecutiveTimeouts, 0);
 
     /// <summary>Retries <paramref name="assertion"/> until it completes without throwing.</summary>
-    public static async Task Assert(Func<Task> assertion, TimeSpan? timeout = null, string? because = null)
+    public static async Task Assert(Func<Task> assertion, TimeSpan? timeout = null, string? because = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(assertion);
         await Assert<object?>(async () =>
         {
             await assertion();
             return null;
-        }, timeout, because);
+        }, timeout, because, ct);
     }
 
     /// <summary>Retries <paramref name="assertion"/> until it returns without throwing, then returns its result.</summary>
-    public static async Task<T> Assert<T>(Func<Task<T>> assertion, TimeSpan? timeout = null, string? because = null)
+    /// <param name="ct">
+    /// The caller's token, when the assertion is given one. Retrying cannot outlive it, so a token that is already
+    /// cancelled fails immediately rather than spending the whole timeout re-learning that.
+    /// </param>
+    public static async Task<T> Assert<T>(Func<Task<T>> assertion, TimeSpan? timeout = null, string? because = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(assertion);
         var limit = timeout ?? DefaultTimeout;
-        var ct = TestContext.Current.CancellationToken;
+        var testCt = TestContext.Current.CancellationToken;
         var giveUpLimit = ConsecutiveTimeoutLimit;
+
+        // An already-cancelled caller token cannot produce a different answer on attempt 244 than on attempt 1: every
+        // call the assertion makes is cancelled before it reaches the network, so polling on reports "still failing
+        // after 119.6s: A task was canceled" and hides the real problem, which is whoever spent the budget first.
+        if (ct.IsCancellationRequested)
+        {
+            var what = because is null ? "This condition" : $"'{because}'";
+            throw new EventuallyTimeoutException(
+                $"{what} was not evaluated: the caller's CancellationToken was already cancelled before the first "
+                + "attempt, so every attempt would fail the same way. Whatever consumed that token's budget is the "
+                + "real failure.",
+                new OperationCanceledException(ct));
+        }
 
         // Nothing here has been evaluated: say so plainly, so this is not read as the assertion's own failure.
         if (giveUpLimit > 0 && Volatile.Read(ref consecutiveTimeouts) >= giveUpLimit)
@@ -104,8 +121,19 @@ public static class Eventually
                 Interlocked.Exchange(ref consecutiveTimeouts, 0);
                 return result;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            catch (Exception ex) when (ex is not OperationCanceledException || !(testCt.IsCancellationRequested || ct.IsCancellationRequested))
             {
+                // Cancelled part-way through: stop here and report the last real failure, rather than polling on
+                // against a dead token until the timeout and reporting "A task was canceled" instead.
+                if (ct.IsCancellationRequested)
+                {
+                    var cancelled = because is null ? "Condition" : $"'{because}'";
+                    throw new EventuallyTimeoutException(
+                        string.Create(CultureInfo.InvariantCulture,
+                            $"{cancelled} was still failing after {attempts} attempts over {watch.Elapsed.TotalSeconds:0.0}s when the caller's CancellationToken was cancelled. Last failure:{Environment.NewLine}{ex.Message}"),
+                        ex);
+                }
+
                 if (watch.Elapsed + delay >= limit)
                 {
                     // Only an expensive wait counts: see MinimumCountedTimeout.
@@ -120,20 +148,20 @@ public static class Eventually
                 }
             }
 
-            await Task.Delay(delay, ct);
+            await Task.Delay(delay, testCt);
             delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 1.5, 500));
         }
     }
 
     /// <summary>Retries until <paramref name="condition"/> returns true.</summary>
-    public static Task True(Func<Task<bool>> condition, TimeSpan? timeout = null, string? because = null)
+    public static Task True(Func<Task<bool>> condition, TimeSpan? timeout = null, string? because = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(condition);
         return Assert(async () =>
         {
             if (!await condition())
                 throw new XunitException($"{because ?? "Condition"} returned false");
-        }, timeout, because);
+        }, timeout, because, ct);
     }
 
     private static int ReadTimeoutLimit()

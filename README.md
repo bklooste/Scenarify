@@ -159,6 +159,10 @@ new ServiceTestOptions
 `ReadinessProbe.From(...)` wraps any check, `ReadinessProbe.None` skips waiting, or implement `IReadinessProbe`. A probe
 runs after features start and is retried until `StartupTimeout`; other `Services` are still health-checked.
 
+`StartupTimeout` is applied per startup phase — MockServer, then `Features`, then the health and readiness waits — not
+as one budget shared across all of them. A feature that takes its time slows startup; it does not leave the health wait
+with a token that is already cancelled and a failure that blames the service.
+
 ### Mixing C# values with tokens
 
 Tokens use `{{name}}`, and so does C# raw-string interpolation — a `$$"""` string reads `{{customerId}}` as a C#
