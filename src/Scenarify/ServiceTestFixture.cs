@@ -78,7 +78,11 @@ public sealed record ServiceTestOptions
     /// <summary>Path polled until it returns 200.</summary>
     public string HealthPath { get; init; } = "health";
 
-    /// <summary>How long to wait for the service and MockServer to come up.</summary>
+    /// <summary>
+    /// How long to wait for the service and MockServer to come up. Each startup phase — MockServer, then
+    /// <see cref="Features"/>, then the health and readiness waits — gets this budget in full, rather than sharing
+    /// one: a slow feature must not leave the health wait with a token that is already cancelled.
+    /// </summary>
     public TimeSpan StartupTimeout { get; init; } = TimeSpan.FromMinutes(2);
 }
 
@@ -211,28 +215,35 @@ public abstract class ServiceTestFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         var watch = Stopwatch.StartNew();
-        using var cts = new CancellationTokenSource(Options.StartupTimeout);
 
+        // One budget per phase, not one for all of them: a feature that overruns used to leave an already-cancelled
+        // token for the health wait, which then failed instantly on every attempt for its whole timeout and blamed the
+        // service ("still failing after 244 attempts: A task was canceled") for a stack that was never asked.
         if (Options.MockServer)
         {
+            using var mockCts = new CancellationTokenSource(Options.StartupTimeout);
             var url = new Uri(Config[MockServerUrlKey]!);
             var client = new MockServerClient(url.DnsSafeHost, url.Port);
             Log($"Waiting for MockServer at {url}");
             await client.WaitUntilReadyAsync(Options.StartupTimeout);
             await client.ResetAsync();
             foreach (var file in Options.MockServerFiles)
-                await client.LoadExpectationsAsync(Json.File(file), NewVariables(), cts.Token);
+                await client.LoadExpectationsAsync(Json.File(file), NewVariables(), mockCts.Token);
             mockServer = client;
         }
 
         foreach (var feature in Options.Features)
-            await feature.StartAsync(this, cts.Token);
+        {
+            using var featureCts = new CancellationTokenSource(Options.StartupTimeout);
+            await feature.StartAsync(this, featureCts.Token);
+        }
 
-        var waits = otherClients.Values.Select(clients => WaitHealthyAsync(clients, cts.Token)).ToList();
+        using var readyCts = new CancellationTokenSource(Options.StartupTimeout);
+        var waits = otherClients.Values.Select(clients => WaitHealthyAsync(clients, readyCts.Token)).ToList();
         if (Options.Readiness is { } probe)
-            waits.Add(WaitReadyAsync(probe, cts.Token));
+            waits.Add(WaitReadyAsync(probe, readyCts.Token));
         else if (Options.ServesHttp)
-            waits.Add(WaitHealthyAsync(Clients, cts.Token));
+            waits.Add(WaitHealthyAsync(Clients, readyCts.Token));
         await Task.WhenAll(waits);
 
         Log($"Ready in {watch.Elapsed.TotalSeconds:0.0}s");
@@ -245,7 +256,7 @@ public abstract class ServiceTestFixture : IAsyncLifetime
         {
             if (!await probe.IsReadyAsync(this, ct))
                 throw new InvalidOperationException("readiness probe reported not ready");
-        }, Options.StartupTimeout, "service ready (readiness probe)");
+        }, Options.StartupTimeout, "service ready (readiness probe)", ct);
     }
 
     private Task WaitHealthyAsync(TestClients clients, CancellationToken ct)
@@ -256,7 +267,7 @@ public abstract class ServiceTestFixture : IAsyncLifetime
             using var response = await clients.Anonymous().GetAsync(Options.HealthPath, ct);
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException($"health returned {(int)response.StatusCode}");
-        }, Options.StartupTimeout, $"service at {clients.BaseAddress} healthy");
+        }, Options.StartupTimeout, $"service at {clients.BaseAddress} healthy", ct);
     }
 
     /// <inheritdoc />
