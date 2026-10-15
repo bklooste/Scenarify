@@ -4,6 +4,19 @@ Every push to `main` publishes a new patch version automatically (see `version.j
 not manually tagged), so not every version number gets its own entry here. This file tracks what
 actually changed.
 
+## 2026-10-04 (later)
+
+### Changed
+
+- The caller's `CancellationToken` moved from an optional trailing parameter on `Eventually.Assert`/`.True` to a
+  **required first** parameter on separate overloads: `Eventually.Assert(ct, assertion, timeout, because)`. Calls that
+  pass no token keep a signature with no `CancellationToken` at all, so nothing existing changes.
+
+  Why: an optional trailing `CancellationToken` makes xUnit's analyzer (xUnit1051, "should use
+  `TestContext.Current.CancellationToken`") fire at every call site that omits it. In a consumer treating warnings as
+  errors that is a build break, and 0.1.11 caused one on the first direct `Eventually.Assert` in a test body it met.
+  An overload the caller either picks or does not cannot produce the diagnostic.
+
 ## 2026-10-04
 
 ### Fixed

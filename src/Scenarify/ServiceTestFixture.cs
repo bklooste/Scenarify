@@ -252,22 +252,22 @@ public abstract class ServiceTestFixture : IAsyncLifetime
     private Task WaitReadyAsync(IReadinessProbe probe, CancellationToken ct)
     {
         Log("Waiting for readiness probe");
-        return Eventually.Assert(async () =>
+        return Eventually.Assert(ct, async () =>
         {
             if (!await probe.IsReadyAsync(this, ct))
                 throw new InvalidOperationException("readiness probe reported not ready");
-        }, Options.StartupTimeout, "service ready (readiness probe)", ct);
+        }, Options.StartupTimeout, "service ready (readiness probe)");
     }
 
     private Task WaitHealthyAsync(TestClients clients, CancellationToken ct)
     {
         Log($"Waiting for service health at {clients.BaseAddress}{Options.HealthPath}");
-        return Eventually.Assert(async () =>
+        return Eventually.Assert(ct, async () =>
         {
             using var response = await clients.Anonymous().GetAsync(Options.HealthPath, ct);
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException($"health returned {(int)response.StatusCode}");
-        }, Options.StartupTimeout, $"service at {clients.BaseAddress} healthy", ct);
+        }, Options.StartupTimeout, $"service at {clients.BaseAddress} healthy");
     }
 
     /// <inheritdoc />

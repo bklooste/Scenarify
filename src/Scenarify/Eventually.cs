@@ -60,22 +60,35 @@ public static class Eventually
     public static void ResetFailureCount() => Interlocked.Exchange(ref consecutiveTimeouts, 0);
 
     /// <summary>Retries <paramref name="assertion"/> until it completes without throwing.</summary>
-    public static async Task Assert(Func<Task> assertion, TimeSpan? timeout = null, string? because = null, CancellationToken ct = default)
+    public static Task Assert(Func<Task> assertion, TimeSpan? timeout = null, string? because = null) =>
+        Assert(CancellationToken.None, assertion, timeout, because);
+
+    /// <inheritdoc cref="Assert{T}(CancellationToken, Func{Task{T}}, TimeSpan?, string?)"/>
+    public static async Task Assert(CancellationToken ct, Func<Task> assertion, TimeSpan? timeout = null, string? because = null)
     {
         ArgumentNullException.ThrowIfNull(assertion);
-        await Assert<object?>(async () =>
+        await Assert<object?>(ct, async () =>
         {
             await assertion();
             return null;
-        }, timeout, because, ct);
+        }, timeout, because);
     }
 
     /// <summary>Retries <paramref name="assertion"/> until it returns without throwing, then returns its result.</summary>
+    public static Task<T> Assert<T>(Func<Task<T>> assertion, TimeSpan? timeout = null, string? because = null) =>
+        Assert(CancellationToken.None, assertion, timeout, because);
+
+    /// <summary>Retries <paramref name="assertion"/>, bounded by <paramref name="ct"/> as well as by the timeout.</summary>
     /// <param name="ct">
-    /// The caller's token, when the assertion is given one. Retrying cannot outlive it, so a token that is already
-    /// cancelled fails immediately rather than spending the whole timeout re-learning that.
+    /// The caller's budget. Retrying cannot outlive it, so a token that is already cancelled fails immediately instead
+    /// of spending the whole timeout re-learning that, and one cancelled mid-wait reports the last real failure.
     /// </param>
-    public static async Task<T> Assert<T>(Func<Task<T>> assertion, TimeSpan? timeout = null, string? because = null, CancellationToken ct = default)
+    /// <remarks>
+    /// The token is the first parameter, and required, deliberately: an optional trailing <see cref="CancellationToken"/>
+    /// on <see cref="Assert{T}(Func{Task{T}}, TimeSpan?, string?)"/> would make xUnit's analyzer (xUnit1051) fire at every
+    /// existing call site that does not pass one, which is an error in any repo treating warnings as errors.
+    /// </remarks>
+    public static async Task<T> Assert<T>(CancellationToken ct, Func<Task<T>> assertion, TimeSpan? timeout = null, string? because = null)
     {
         ArgumentNullException.ThrowIfNull(assertion);
         var limit = timeout ?? DefaultTimeout;
@@ -154,14 +167,18 @@ public static class Eventually
     }
 
     /// <summary>Retries until <paramref name="condition"/> returns true.</summary>
-    public static Task True(Func<Task<bool>> condition, TimeSpan? timeout = null, string? because = null, CancellationToken ct = default)
+    public static Task True(Func<Task<bool>> condition, TimeSpan? timeout = null, string? because = null) =>
+        True(CancellationToken.None, condition, timeout, because);
+
+    /// <inheritdoc cref="Assert{T}(CancellationToken, Func{Task{T}}, TimeSpan?, string?)"/>
+    public static Task True(CancellationToken ct, Func<Task<bool>> condition, TimeSpan? timeout = null, string? because = null)
     {
         ArgumentNullException.ThrowIfNull(condition);
-        return Assert(async () =>
+        return Assert(ct, async () =>
         {
             if (!await condition())
                 throw new XunitException($"{because ?? "Condition"} returned false");
-        }, timeout, because, ct);
+        }, timeout, because);
     }
 
     private static int ReadTimeoutLimit()

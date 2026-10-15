@@ -17,11 +17,11 @@ public class EventuallyCancellationTests
         var attempts = 0;
 
         var watch = Stopwatch.StartNew();
-        var error = await Assert.ThrowsAsync<EventuallyTimeoutException>(() => Eventually.Assert(() =>
+        var error = await Assert.ThrowsAsync<EventuallyTimeoutException>(() => Eventually.Assert(cts.Token, () =>
         {
             attempts++;
             throw new InvalidOperationException("dependency is down");
-        }, TimeSpan.FromSeconds(30), "service healthy", cts.Token));
+        }, TimeSpan.FromSeconds(30), "service healthy"));
 
         Assert.Equal(0, attempts);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"Took {watch.Elapsed}, so it polled rather than giving up.");
@@ -35,10 +35,10 @@ public class EventuallyCancellationTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
 
         var error = await Assert.ThrowsAsync<EventuallyTimeoutException>(() => Eventually.Assert(
+            cts.Token,
             () => throw new InvalidOperationException("dependency is down"),
             TimeSpan.FromSeconds(30),
-            "service healthy",
-            cts.Token));
+            "service healthy"));
 
         Assert.Contains("CancellationToken was cancelled", error.Message, StringComparison.Ordinal);
         // The point of the change: the reported cause is the assertion's own failure, not the cancellation.
@@ -51,13 +51,13 @@ public class EventuallyCancellationTests
         using var cts = new CancellationTokenSource();
         var attempts = 0;
 
-        var result = await Eventually.Assert(() =>
+        var result = await Eventually.Assert(cts.Token, () =>
         {
             attempts++;
             if (attempts < 3)
                 throw new InvalidOperationException("not yet");
             return Task.FromResult(attempts);
-        }, TimeSpan.FromSeconds(10), "eventually succeeds", cts.Token);
+        }, TimeSpan.FromSeconds(10), "eventually succeeds");
 
         Assert.Equal(3, result);
     }
