@@ -2,7 +2,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+        <!-- xunit.v3 makes the project an exe, but only through a package .props that restore cannot see on a clean
+             cache. Declared here, restore also fetches the apphost pack; the 11.0 SDK only bundles the net11.0 one. -->
+        <OutputType>Exe</OutputType>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
