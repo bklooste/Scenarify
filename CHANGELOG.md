@@ -4,6 +4,22 @@ Every push to `main` publishes a new patch version automatically (see `version.j
 not manually tagged), so not every version number gets its own entry here. This file tracks what
 actually changed.
 
+## 2026-10-16
+
+### Added
+
+- The trailing-token form of `Eventually` is accepted again, for source compatibility with 0.1.11:
+  `Eventually.Assert(assertion, timeout, because, ct)`, `Eventually.Assert<T>(...)` and
+  `Eventually.True(condition, timeout, because, ct)`. Each delegates to the token-first overload, so behaviour is
+  identical. The token-first form `Assert(ct, assertion, timeout, because)` stays and is still the one to prefer.
+
+  Why the token is **required** here, not optional: an optional trailing `CancellationToken` is what made xUnit's
+  analyzer (xUnit1051) fire at every call that omits it in 0.1.11. With all four parameters required, a call that passes
+  no token cannot bind to the new overloads, so those calls are unchanged and stay free of the diagnostic. One
+  deliberate oddity: `because` is typed `object?` on the trailing overloads, because xUnit1051 also flags a call when a
+  sibling overload has the same parameter types plus a trailing `CancellationToken`, and a `string?` there would be
+  exactly that sibling. Strings, interpolated strings and `null` bind as before, and `ToString()` is applied.
+
 ## 2026-10-04 (later)
 
 ### Changed

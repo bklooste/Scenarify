@@ -74,6 +74,22 @@ public static class Eventually
         }, timeout, because);
     }
 
+    /// <summary>
+    /// <see cref="Assert(CancellationToken, Func{Task}, TimeSpan?, string?)"/> with the token last, the shape 0.1.11 shipped:
+    /// <c>Assert(assertion, timeout, because, ct)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="ct"/> is required here, not optional, deliberately: an optional trailing
+    /// <see cref="CancellationToken"/> would make xUnit's analyzer (xUnit1051) fire at every call that omits it, which
+    /// is an error in any repo treating warnings as errors. With every parameter required, a call that passes no token
+    /// cannot bind to this overload. <paramref name="because"/> is <see cref="object"/> rather than <see cref="string"/>
+    /// for a second, related reason: xUnit1051 also flags a call when a sibling overload has the same parameter types plus
+    /// a trailing <see cref="CancellationToken"/>, and a string here would be exactly that sibling of the no-token
+    /// overload. Any string, interpolated string or null still binds, and the token-first overload wins whenever both apply.
+    /// </remarks>
+    public static Task Assert(Func<Task> assertion, TimeSpan? timeout, object? because, CancellationToken ct) =>
+        Assert(ct, assertion, timeout, because?.ToString());
+
     /// <summary>Retries <paramref name="assertion"/> until it returns without throwing, then returns its result.</summary>
     public static Task<T> Assert<T>(Func<Task<T>> assertion, TimeSpan? timeout = null, string? because = null) =>
         Assert(CancellationToken.None, assertion, timeout, because);
@@ -166,6 +182,22 @@ public static class Eventually
         }
     }
 
+    /// <summary>
+    /// <see cref="Assert{T}(CancellationToken, Func{Task{T}}, TimeSpan?, string?)"/> with the token last, the shape 0.1.11
+    /// shipped: <c>Assert(assertion, timeout, because, ct)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="ct"/> is required here, not optional, deliberately: an optional trailing
+    /// <see cref="CancellationToken"/> would make xUnit's analyzer (xUnit1051) fire at every call that omits it, which
+    /// is an error in any repo treating warnings as errors. With every parameter required, a call that passes no token
+    /// cannot bind to this overload. <paramref name="because"/> is <see cref="object"/> rather than <see cref="string"/>
+    /// for a second, related reason: xUnit1051 also flags a call when a sibling overload has the same parameter types plus
+    /// a trailing <see cref="CancellationToken"/>, and a string here would be exactly that sibling of the no-token
+    /// overload. Any string, interpolated string or null still binds, and the token-first overload wins whenever both apply.
+    /// </remarks>
+    public static Task<T> Assert<T>(Func<Task<T>> assertion, TimeSpan? timeout, object? because, CancellationToken ct) =>
+        Assert(ct, assertion, timeout, because?.ToString());
+
     /// <summary>Retries until <paramref name="condition"/> returns true.</summary>
     public static Task True(Func<Task<bool>> condition, TimeSpan? timeout = null, string? because = null) =>
         True(CancellationToken.None, condition, timeout, because);
@@ -180,6 +212,22 @@ public static class Eventually
                 throw new XunitException($"{because ?? "Condition"} returned false");
         }, timeout, because);
     }
+
+    /// <summary>
+    /// <see cref="True(CancellationToken, Func{Task{bool}}, TimeSpan?, string?)"/> with the token last, the shape 0.1.11
+    /// shipped: <c>True(condition, timeout, because, ct)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="ct"/> is required here, not optional, deliberately: an optional trailing
+    /// <see cref="CancellationToken"/> would make xUnit's analyzer (xUnit1051) fire at every call that omits it, which
+    /// is an error in any repo treating warnings as errors. With every parameter required, a call that passes no token
+    /// cannot bind to this overload. <paramref name="because"/> is <see cref="object"/> rather than <see cref="string"/>
+    /// for a second, related reason: xUnit1051 also flags a call when a sibling overload has the same parameter types plus
+    /// a trailing <see cref="CancellationToken"/>, and a string here would be exactly that sibling of the no-token
+    /// overload. Any string, interpolated string or null still binds, and the token-first overload wins whenever both apply.
+    /// </remarks>
+    public static Task True(Func<Task<bool>> condition, TimeSpan? timeout, object? because, CancellationToken ct) =>
+        True(ct, condition, timeout, because?.ToString());
 
     private static int ReadTimeoutLimit()
     {
