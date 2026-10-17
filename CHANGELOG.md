@@ -20,6 +20,17 @@ actually changed.
   sibling overload has the same parameter types plus a trailing `CancellationToken`, and a `string?` there would be
   exactly that sibling. Strings, interpolated strings and `null` bind as before, and `ToString()` is applied.
 
+## 2026-10-17
+
+### Added
+
+- `ServiceTestFixture.Config` reads `GLOBAL_`-prefixed environment variables as the lowest environment layer:
+  in-memory defaults, then `GLOBAL_`, then unprefixed, then `DOTNET_`. `GLOBAL_X` supplies `X` only when nothing
+  more specific sets it.
+
+  Why: shared env files (e.g. lode's `config/*.env`) move app-wide defaults from `DOTNET_` to `GLOBAL_` so they no
+  longer beat per-service settings; test fixtures must read them the same way the services do.
+
 ## 2026-10-04 (later)
 
 ### Changed

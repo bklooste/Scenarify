@@ -44,7 +44,7 @@ public sealed record ServiceTestOptions
     /// <summary>Features started before the health wait, e.g. <c>RedisFeature</c>.</summary>
     public IReadOnlyList<IFixtureFeature> Features { get; init; } = [];
 
-    /// <summary>In-memory configuration defaults, overridden by environment variables and then by <c>DOTNET_</c> ones.</summary>
+    /// <summary>In-memory configuration defaults, overridden by <c>GLOBAL_</c> environment variables, then unprefixed ones, then <c>DOTNET_</c> ones.</summary>
     public IReadOnlyDictionary<string, string?> Config { get; init; } = new Dictionary<string, string?>();
 
     /// <summary>
@@ -134,6 +134,7 @@ public abstract class ServiceTestFixture : IAsyncLifetime
 
         Config = new ConfigurationBuilder()
             .AddInMemoryCollection(defaults)
+            .AddEnvironmentVariables("GLOBAL_")
             .AddEnvironmentVariables()
             .AddEnvironmentVariables("DOTNET_")
             .Build();
@@ -151,7 +152,7 @@ public abstract class ServiceTestFixture : IAsyncLifetime
     /// <summary>The options this fixture was built with.</summary>
     public ServiceTestOptions Options { get; }
 
-    /// <summary>Merged configuration: defaults, environment, then <c>DOTNET_</c> environment.</summary>
+    /// <summary>Merged configuration, lowest first: in-memory defaults, <c>GLOBAL_</c> environment, unprefixed environment, then <c>DOTNET_</c> environment.</summary>
     public IConfiguration Config { get; }
 
     /// <summary>The service base URL, always ending in <c>/</c>.</summary>
