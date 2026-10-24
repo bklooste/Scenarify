@@ -97,3 +97,12 @@ actually changed.
 - Initial public release, forked from a betting platform's internal `Orange.Lib.XUnit`/`Orange.Lib.XUnit.Redis`
   (renamed `Scenarify`/`Scenarify.Redis`): scenario builder, JSON tokens/matching/snapshots, MockServer steps,
   `ServiceTestFixture`, and Redis Streams steps over [RedisEvents](https://github.com/bklooste/RedisEvents).
+
+## 2026-10-24
+
+### Changed
+
+- A second `.When(...)` still throws `InvalidOperationException`, but the message now says how to fix it: move earlier
+  steps to `.Given(...)`, or pass a run of actions as one trigger with `.When(first, second, ...)`. That multi-step
+  `When` overload already existed; it is now documented in the README and covered by tests (order, shared variables,
+  a failing child fails the scenario with its own error).

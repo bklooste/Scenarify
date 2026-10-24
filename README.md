@@ -29,7 +29,9 @@ You can, and Scenarify doesn't stop you (see "Escape hatches" below) — but mos
 
 ## Features
 
-- **Scenario builder**: `Given*` (setup) → `When` (trigger) → `Then+` (checks), with `WhenConcurrently` for
+- **Scenario builder**: `Given*` (setup) → `When` (trigger) → `Then+` (checks). There is exactly one `When`: earlier
+  sends that only set the stage are `.Given(...)`; a trigger that genuinely is a short run of actions is
+  `.When(first, second, ...)` (one When, children run in order, sharing variables). `WhenConcurrently` is for
   concurrency tests and a `.Given(ctx => ...)`/`.When(...)`/`.Then(...)` escape hatch for anything else.
 - **HTTP steps**: `Http.Get/Post/Put/Patch/Delete`, scopes/brand/user headers with token expansion, `.Eventually()`
   to poll a Given, `.Capture(name, path)`, snapshot and subset/exact JSON checks.
