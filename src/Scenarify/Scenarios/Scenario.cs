@@ -77,7 +77,9 @@ public sealed class Scenario
     {
         ArgumentNullException.ThrowIfNull(step);
         if (when is not null)
-            throw new InvalidOperationException("A scenario has exactly one When.");
+            throw new InvalidOperationException(
+                "A scenario has exactly one When (the trigger under test). Move earlier steps to .Given(...), " +
+                "or pass a run of actions as one trigger with .When(first, second, ...).");
         when = lastArrange = new Arrange(step.WhenAsync, step);
         return this;
     }
