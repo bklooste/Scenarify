@@ -106,3 +106,29 @@ actually changed.
   steps to `.Given(...)`, or pass a run of actions as one trigger with `.When(first, second, ...)`. That multi-step
   `When` overload already existed; it is now documented in the README and covered by tests (order, shared variables,
   a failing child fails the scenario with its own error).
+
+## 2026-10-30
+
+### Added
+
+- Four new opt-in broker add-ons, each following the same shape as `Scenarify.Redis` (a feature started by
+  `ServiceTestFixture`, a `*Sender`/`*Recorder` pair, and steps to trigger and assert on messages), but naming their
+  steps for the broker's own vocabulary rather than forcing one term everywhere, and using each SDK's native fields
+  instead of Redis's header-based workarounds where one exists:
+  - **`Scenarify.EventHubs`**: `EventHubs.Publish`/`Published`/`NotPublished` over Azure Event Hubs. Correlation id
+    uses the SDK's native `EventData.CorrelationId`; the recorder reads every partition from its last enqueued
+    sequence number at start, so it never replays history.
+  - **`Scenarify.ServiceBus`**: `ServiceBus.Send`/`Sent`/`NotSent` over Azure Service Bus queues, or topics via a
+    subscription name (`subscriptions: { "topic": "subscription" }`). Uses the native `CorrelationId`,
+    `ApplicationProperties` and `PartitionKey`.
+  - **`Scenarify.Kafka`**: `Kafka.Produce`/`Produced`/`NotProduced` over Apache Kafka. Message type and correlation
+    id travel as record headers (Kafka has no native fields for either); the recorder seeks every assigned
+    partition to its high watermark on assignment for the same tail-only recording guarantee the other add-ons give.
+  - **`Scenarify.Kinesis`**: `Kinesis.Publish`/`Published`/`NotPublished` over AWS Kinesis Data Streams. Kinesis
+    records carry no type, correlation id or headers, so — unlike the other three — these steps match only on
+    partition key and JSON body content; nothing is invented to fake a wire format Kinesis doesn't have. The
+    feature creates a configured stream if it doesn't already exist and waits for it to become active.
+
+  All four ship with Testcontainers-backed service tests against a real broker (the official Azure Event Hubs and
+  Service Bus emulators, a single-node KRaft Kafka broker, and LocalStack for Kinesis), covering the same ground as
+  `Scenarify.Redis`'s `StreamTests` adapted to what each backend actually supports.

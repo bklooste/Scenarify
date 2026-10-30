@@ -1,0 +1,77 @@
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
+
+using Testcontainers.Kafka;
+
+namespace XUnitKafkaTests;
+
+[CollectionDefinition(Name)]
+public sealed class ContainerCollection : ICollectionFixture<Containers>
+{
+    public const string Name = "containers";
+}
+
+/// <summary>
+/// A real single-node KRaft Kafka broker and MockServer. MockServer doubles as "the service under test", so the
+/// fixture's HTTP steps, headers and health wait run against a real server.
+/// </summary>
+public sealed class Containers : IAsyncLifetime
+{
+    public const string Orders = "orders";
+    public const string Payments = "payments";
+
+    // Deliberate exception to the raw-ContainerBuilder convention: Kafka must advertise a listener on the mapped host
+    // port, which is only known after start; Testcontainers.Kafka implements that self-referential bootstrap.
+    private readonly KafkaContainer kafka = new KafkaBuilder("apache/kafka:3.9.1").Build();
+
+    private readonly IContainer mockServer = new ContainerBuilder("mockserver/mockserver:5.15.0")
+        .WithCommand("-serverPort", "1090", "-logLevel", "WARN")
+        .WithPortBinding(1090, assignRandomHostPort: true)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilExternalTcpPortIsAvailable(1090))
+        .Build();
+
+    public string BootstrapServers { get; private set; } = "";
+
+    public string MockUrl { get; private set; } = "";
+
+    public MockBackedFixture Fixture { get; private set; } = null!;
+
+    public async ValueTask InitializeAsync()
+    {
+        await Task.WhenAll(kafka.StartAsync(), mockServer.StartAsync());
+        BootstrapServers = kafka.GetBootstrapAddress();
+        MockUrl = $"http://{mockServer.Hostname}:{mockServer.GetMappedPublicPort(1090)}";
+        Fixture = new MockBackedFixture(MockUrl, BootstrapServers);
+        await Fixture.InitializeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await Fixture.DisposeAsync();
+        await Task.WhenAll(kafka.DisposeAsync().AsTask(), mockServer.DisposeAsync().AsTask());
+    }
+}
+
+public sealed class MockBackedFixture(string mockUrl, string bootstrapServers) : ServiceTestFixture(new ServiceTestOptions
+{
+    MockServer = true,
+    MockServerFiles = ["mockserver/health.json"],
+    DefaultScopes = "orders-r orders-w:{{brand}}",
+    Brand = "sbx",
+    Config = new Dictionary<string, string?>
+    {
+        [BaseUrlKey] = mockUrl,
+        [MockServerUrlKey] = mockUrl,
+        ["OtherHttpUrl"] = mockUrl + "/other",
+        ["Kafka:BootstrapServers"] = bootstrapServers,
+    },
+    Services = new Dictionary<string, string> { ["other"] = "OtherHttpUrl" },
+    Features =
+    [
+        new KafkaFeature(
+            publish: [Containers.Orders, Containers.Payments],
+            record: [Containers.Orders, Containers.Payments]),
+    ],
+});
+
+public sealed record OrderPlaced(string OrderId, string CustomerId, decimal Amount, string[] Items);

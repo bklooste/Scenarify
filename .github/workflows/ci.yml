@@ -39,7 +39,7 @@ jobs:
           --logger "trx"
           --results-directory TestResults
 
-      - name: "Service tests (Testcontainers: Redis, MockServer)"
+      - name: "Service tests (Testcontainers: Redis, MockServer, Event Hubs/Service Bus emulators, Kafka, LocalStack)"
         run: >
           dotnet test Scenarify.slnx -c Release --no-build
           --filter "TestType=ServiceTest"
@@ -87,6 +87,26 @@ jobs:
       - name: Pack Scenarify.Redis
         run: >
           dotnet pack src/Scenarify.Redis/Scenarify.Redis.csproj
+          -c Release --no-restore -o nupkgs
+
+      - name: Pack Scenarify.EventHubs
+        run: >
+          dotnet pack src/Scenarify.EventHubs/Scenarify.EventHubs.csproj
+          -c Release --no-restore -o nupkgs
+
+      - name: Pack Scenarify.ServiceBus
+        run: >
+          dotnet pack src/Scenarify.ServiceBus/Scenarify.ServiceBus.csproj
+          -c Release --no-restore -o nupkgs
+
+      - name: Pack Scenarify.Kafka
+        run: >
+          dotnet pack src/Scenarify.Kafka/Scenarify.Kafka.csproj
+          -c Release --no-restore -o nupkgs
+
+      - name: Pack Scenarify.Kinesis
+        run: >
+          dotnet pack src/Scenarify.Kinesis/Scenarify.Kinesis.csproj
           -c Release --no-restore -o nupkgs
 
       - name: NuGet login (OIDC -> temp API key)

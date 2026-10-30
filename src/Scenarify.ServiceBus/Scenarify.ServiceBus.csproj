@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+        <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <!-- Shares Scenarify's root namespace so a single "using Scenarify;" covers both packages. -->
+        <RootNamespace>Scenarify</RootNamespace>
+        <Description>Azure Service Bus scenario steps for Scenarify: send to queues/topics, assert on received messages,
+            and a ServiceBusFeature that starts alongside the service under test.</Description>
+        <PackageTags>xunit;testing;integration-testing;azure;servicebus;azure-service-bus;scenario-testing</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Scenarify\Scenarify.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.21.0" />
+    </ItemGroup>
+
+</Project>

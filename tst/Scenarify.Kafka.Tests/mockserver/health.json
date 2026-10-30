@@ -1,0 +1,54 @@
+[
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/health"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "body": "Healthy"
+    },
+    "times": {
+      "unlimited": true
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/other/health"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "body": "Healthy"
+    },
+    "times": {
+      "unlimited": true
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/swagger/v1/swagger.json"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "body": "{}"
+    },
+    "times": {
+      "unlimited": true
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/other/swagger/v1/swagger.json"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "body": "{}"
+    },
+    "times": {
+      "unlimited": true
+    }
+  }
+]
