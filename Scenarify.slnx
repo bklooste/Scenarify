@@ -2,9 +2,17 @@
   <Folder Name="/src/">
     <Project Path="src/Scenarify/Scenarify.csproj" />
     <Project Path="src/Scenarify.Redis/Scenarify.Redis.csproj" />
+    <Project Path="src/Scenarify.EventHubs/Scenarify.EventHubs.csproj" />
+    <Project Path="src/Scenarify.ServiceBus/Scenarify.ServiceBus.csproj" />
+    <Project Path="src/Scenarify.Kafka/Scenarify.Kafka.csproj" />
+    <Project Path="src/Scenarify.Kinesis/Scenarify.Kinesis.csproj" />
   </Folder>
   <Folder Name="/tst/">
     <Project Path="tst/Scenarify.UnitTests/Scenarify.UnitTests.csproj" />
     <Project Path="tst/Scenarify.Redis.Tests/Scenarify.Redis.Tests.csproj" />
+    <Project Path="tst/Scenarify.EventHubs.Tests/Scenarify.EventHubs.Tests.csproj" />
+    <Project Path="tst/Scenarify.ServiceBus.Tests/Scenarify.ServiceBus.Tests.csproj" />
+    <Project Path="tst/Scenarify.Kafka.Tests/Scenarify.Kafka.Tests.csproj" />
+    <Project Path="tst/Scenarify.Kinesis.Tests/Scenarify.Kinesis.Tests.csproj" />
   </Folder>
 </Solution>

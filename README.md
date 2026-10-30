@@ -3,10 +3,15 @@
 [![CI](https://github.com/bklooste/Scenarify/actions/workflows/ci.yml/badge.svg)](https://github.com/bklooste/Scenarify/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/Scenarify.svg)](https://www.nuget.org/packages/Scenarify)
 [![NuGet](https://img.shields.io/nuget/v/Scenarify.Redis.svg?label=Scenarify.Redis)](https://www.nuget.org/packages/Scenarify.Redis)
+[![NuGet](https://img.shields.io/nuget/v/Scenarify.EventHubs.svg?label=Scenarify.EventHubs)](https://www.nuget.org/packages/Scenarify.EventHubs)
+[![NuGet](https://img.shields.io/nuget/v/Scenarify.ServiceBus.svg?label=Scenarify.ServiceBus)](https://www.nuget.org/packages/Scenarify.ServiceBus)
+[![NuGet](https://img.shields.io/nuget/v/Scenarify.Kafka.svg?label=Scenarify.Kafka)](https://www.nuget.org/packages/Scenarify.Kafka)
+[![NuGet](https://img.shields.io/nuget/v/Scenarify.Kinesis.svg?label=Scenarify.Kinesis)](https://www.nuget.org/packages/Scenarify.Kinesis)
 
 Given\*/When/Then+ scenario testing for xUnit v3 service tests: JSON matching with token expansion, MockServer
-stubs, a `ServiceTestFixture` that spins up the service under test, and (via the `Scenarify.Redis` add-on) steps for
-asserting on and publishing Redis Streams messages.
+stubs, a `ServiceTestFixture` that spins up the service under test, and opt-in add-ons for asserting on and
+publishing messages over Redis Streams (`Scenarify.Redis`), Azure Event Hubs (`Scenarify.EventHubs`), Azure
+Service Bus (`Scenarify.ServiceBus`), Kafka (`Scenarify.Kafka`) and AWS Kinesis (`Scenarify.Kinesis`).
 
 ## Why not just write the HTTP calls directly?
 
@@ -51,15 +56,34 @@ You can, and Scenarify doesn't stop you (see "Escape hatches" below) — but mos
   [RedisEvents](https://github.com/bklooste/RedisEvents), `Redis.Set/Get/HashSet/SortedSetAdd/JsonSet` seeding with a
   key prefix and default TTL, `Redis.Subscribe`/`Redis.PublishedOn` for pub/sub, and a `RedisFeature` that starts
   alongside the service under test.
-- Case records (`PostThenGet`, `PostThenResponse`, `PostThenMockReceived`, plus `PublishThenGet`,
-  `PostThenPublished`, `PublishThenMockReceived` in `Scenarify.Redis`) for theory-driven tests, all xUnit-serializable
-  so `[MemberData]` rows show up and rerun individually.
+- **`Scenarify.EventHubs`** (add-on): `EventHubs.Publish`/`Published`/`NotPublished` over Azure Event Hubs, reading
+  every partition from the tail at start so a recorder never replays history. Correlation id uses the SDK's native
+  `EventData.CorrelationId`; message type and extra headers travel in `EventData.Properties`.
+- **`Scenarify.ServiceBus`** (add-on): `ServiceBus.Send`/`Sent`/`NotSent` over Azure Service Bus queues, or topics
+  via a subscription name, with native `CorrelationId`/`ApplicationProperties`/`PartitionKey` support.
+- **`Scenarify.Kafka`** (add-on): `Kafka.Produce`/`Produced`/`NotProduced` over Apache Kafka, seeking every assigned
+  partition to its high watermark at start for the same tail-only recording guarantee. Message type and correlation
+  id travel as record headers (Kafka has no native fields for either).
+- **`Scenarify.Kinesis`** (add-on): `Kinesis.Publish`/`Published`/`NotPublished` over AWS Kinesis Data Streams.
+  Kinesis records carry no type, correlation id or headers, so — unlike the other add-ons — these steps only match
+  on partition key and JSON body content; nothing is invented to fake the missing fields.
+- Case records (`PostThenGet`, `PostThenResponse`, `PostThenMockReceived`, plus the equivalents named for each add-on's
+  own vocabulary — `PublishThenGet`/`PostThenPublished`/`PublishThenMockReceived` in `Scenarify.Redis`,
+  `EventHubsPublishThenGet`/`EventHubsPostThenPublished`/`EventHubsPublishThenMockReceived` in `Scenarify.EventHubs`,
+  `SendThenGet`/`PostThenSent`/`SendThenMockReceived` in `Scenarify.ServiceBus`,
+  `ProduceThenGet`/`PostThenProduced`/`ProduceThenMockReceived` in `Scenarify.Kafka`, and the `Kinesis`-prefixed
+  equivalents in `Scenarify.Kinesis`) for theory-driven tests, all xUnit-serializable so `[MemberData]` rows show up
+  and rerun individually.
 
 ## Quickstart
 
 ```bash
 dotnet add package Scenarify
-dotnet add package Scenarify.Redis   # only if your test publishes or observes Redis Streams messages
+dotnet add package Scenarify.Redis       # only if your test publishes or observes Redis Streams messages
+dotnet add package Scenarify.EventHubs   # only for Azure Event Hubs
+dotnet add package Scenarify.ServiceBus  # only for Azure Service Bus
+dotnet add package Scenarify.Kafka       # only for Apache Kafka
+dotnet add package Scenarify.Kinesis     # only for AWS Kinesis Data Streams
 ```
 
 A fixture, once per test project:
@@ -138,6 +162,36 @@ public Task order_shipped_reserves_stock() =>
 `Redis.Set/HashSet/SortedSetAdd/JsonSet` are discouraged outside cases like this one, where nothing else can reach the
 state a test needs to seed — prefer driving setup through the API or an event. Seeded keys expire after
 `RedisFeature(seedTtl:)` (10 minutes by default) so a forgotten write doesn't linger.
+
+### Other broker add-ons
+
+`Scenarify.EventHubs`, `Scenarify.ServiceBus` and `Scenarify.Kafka` follow the same shape as `Scenarify.Redis` — a
+feature in `ServiceTestOptions.Features`, a `Publish`/`Send`/`Produce` to trigger, a `Published`/`Sent`/`Produced` to
+assert — with each add-on's steps named for its own ecosystem's vocabulary rather than forcing one term everywhere:
+
+```csharp
+// Scenarify.EventHubs — correlation id is the SDK's native EventData.CorrelationId
+.When(EventHubs.Publish("orders", "cases/orders/shipped.json", type: typeof(OrderShipped).FullName, key: "{{orderId}}"))
+.Then(EventHubs.Published<StockReserved>("inventory-events", """{ "sku": "{{sku}}" }"""))
+
+// Scenarify.ServiceBus — queues by name, topics via subscriptions: { "order-events": "order-events-sub" }
+.When(ServiceBus.Send("orders", "cases/orders/shipped.json", type: typeof(OrderShipped).FullName))
+.Then(ServiceBus.Sent<StockReserved>("inventory-events", """{ "sku": "{{sku}}" }"""))
+
+// Scenarify.Kafka — type/correlation id travel as record headers; a recorder seeks every assigned partition
+// to its high watermark at start, so it never replays history already on the topic
+.When(Kafka.Produce("orders", "cases/orders/shipped.json", type: typeof(OrderShipped).FullName))
+.Then(Kafka.Produced<StockReserved>("inventory-events", """{ "sku": "{{sku}}" }"""))
+```
+
+`Scenarify.Kinesis` is narrower by necessity: Kinesis records have no type, correlation id or header fields, so
+`Kinesis.Publish`/`Published`/`NotPublished` match only on partition key and JSON body content — nothing is
+invented to fake a wire format Kinesis doesn't have:
+
+```csharp
+.When(Kinesis.Publish("orders", "cases/orders/shipped.json", partitionKey: "{{orderId}}"))
+.Then(Kinesis.Published("inventory-events", """{ "sku": "{{sku}}" }"""))
+```
 
 ### Workers with no HTTP listener
 
@@ -225,20 +279,26 @@ expectations as test data, not production secrets.
 ```
 src/Scenarify/        Core: JSON sources/tokens/matching/snapshots, Eventually, MockServer helpers,
                        TestClients, ServiceTestFixture, the scenario builder, StandardApiTests
-src/Scenarify.Redis/   Redis Streams add-on: StreamSender/StreamRecorder, RedisFeature, Streams.*/Redis.* steps
-tst/Scenarify.UnitTests/       Fast unit tests (TestType=UnitTest) — no Docker required
-tst/Scenarify.Redis.Tests/     Testcontainers tests against real Redis + MockServer (TestType=ServiceTest)
+src/Scenarify.Redis/      Redis Streams add-on: StreamSender/StreamRecorder, RedisFeature, Streams.*/Redis.* steps
+src/Scenarify.EventHubs/  Azure Event Hubs add-on: EventHubsSender/EventHubsRecorder, EventHubsFeature, EventHubs.* steps
+src/Scenarify.ServiceBus/ Azure Service Bus add-on: ServiceBusSender/ServiceBusRecorder, ServiceBusFeature, ServiceBus.* steps
+src/Scenarify.Kafka/      Apache Kafka add-on: KafkaSender/KafkaRecorder, KafkaFeature, Kafka.* steps
+src/Scenarify.Kinesis/    AWS Kinesis add-on: KinesisSender/KinesisRecorder, KinesisFeature, Kinesis.* steps
+tst/Scenarify.UnitTests/         Fast unit tests (TestType=UnitTest) — no Docker required
+tst/Scenarify.Redis.Tests/       Testcontainers tests against real Redis + MockServer (TestType=ServiceTest)
+tst/Scenarify.EventHubs.Tests/   Testcontainers tests against the real Azure Event Hubs emulator + Azurite
+tst/Scenarify.ServiceBus.Tests/  Testcontainers tests against the real Azure Service Bus emulator + Azure SQL Edge
+tst/Scenarify.Kafka.Tests/       Testcontainers tests against a real single-node KRaft Kafka broker
+tst/Scenarify.Kinesis.Tests/     Testcontainers tests against real LocalStack (Kinesis) + MockServer
 ```
-## Expansion
-
-EventHub and Kafka can be added
 
 ## Building & testing
 
 ```bash
 dotnet build Scenarify.slnx
 dotnet test Scenarify.slnx --filter "TestType=UnitTest"      # fast, no Docker
-dotnet test Scenarify.slnx --filter "TestType=ServiceTest"   # needs Docker (Testcontainers: Redis, MockServer)
+dotnet test Scenarify.slnx --filter "TestType=ServiceTest"   # needs Docker: Redis, MockServer, the Azure Event Hubs
+                                                               # and Service Bus emulators, Kafka, and LocalStack
 ```
 
 ## License

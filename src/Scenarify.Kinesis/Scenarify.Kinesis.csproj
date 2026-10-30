@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+        <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <!-- Shares Scenarify's root namespace so a single "using Scenarify;" covers both packages. -->
+        <RootNamespace>Scenarify</RootNamespace>
+        <Description>AWS Kinesis Data Streams scenario steps for Scenarify: put records, assert on recorded records,
+            and a KinesisFeature that creates streams and starts alongside the service under test.</Description>
+        <PackageTags>xunit;testing;integration-testing;kinesis;aws;aws-kinesis;scenario-testing</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Scenarify\Scenarify.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="AWSSDK.Kinesis" Version="4.0.104.8" />
+    </ItemGroup>
+
+</Project>
