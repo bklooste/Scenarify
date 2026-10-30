@@ -292,4 +292,36 @@ public class StreamTests(Containers containers)
             .Then(Redis.HashGet("unit-hash:{{brand}}", "{{customerId}}").Eventually().Matches("""{ "tier": "gold" }"""))
             .RunAsync();
     }
+
+    [Theory]
+    [InlineData("2026-01-02T03:04:05.0000000Z")]
+    [InlineData("a:b:c")]
+    [InlineData("1.2.3")]
+    public async Task hash_set_stores_a_plain_string_value_as_text_not_a_file_path(string text)
+    {
+        await containers.Fixture.Scenario()
+            .Given(Redis.HashSet("unit-text:{{customerId}}", "f", text))
+            .When(_ => Task.CompletedTask)
+            .Then(new DelegateStep("hash field is the plain text", async ctx =>
+            {
+                var db = await ctx.Fixture.Feature<RedisFeature>().DatabaseAsync();
+                Assert.Equal(text, (string?)await db.HashGetAsync(Redis.ResolveKey(ctx, "unit-text:{{customerId}}"), "f"));
+            }))
+            .RunAsync();
+    }
+
+    [Fact]
+    public async Task hash_set_still_reads_a_json_file_reference()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "cases");
+        Directory.CreateDirectory(dir);
+        var file = $"hashset-{Guid.NewGuid():N}.json";
+        await File.WriteAllTextAsync(Path.Combine(dir, file), """{ "tier": "silver" }""");
+
+        await containers.Fixture.Scenario()
+            .Given(Redis.HashSet("unit-file:{{customerId}}", "f", "cases/" + file))
+            .When(_ => Task.CompletedTask)
+            .Then(Redis.HashGet("unit-file:{{customerId}}", "f").MatchesExactly("""{ "tier": "silver" }"""))
+            .RunAsync();
+    }
 }

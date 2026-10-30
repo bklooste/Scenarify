@@ -31,6 +31,35 @@ public static class Redis
             await ExpireAsync(db, k, ttl);
         });
 
+    /// <summary>
+    /// <c>HSET key field value</c> for a string value. JSON-shaped text (<c>{</c>, <c>[</c>, <c>"</c>, a number, true/false/null)
+    /// or a file reference (ends in <c>.json</c>, or contains a path separator) behaves exactly like the
+    /// <see cref="JsonSource"/> overload; anything else (a timestamp, <c>a:b</c>, <c>1.2.3</c>) is stored as plain text with
+    /// <c>{{tokens}}</c> expanded and is never read as a file. Use <see cref="Json.File"/> to force a file.
+    /// </summary>
+    public static DelegateStep HashSet(string key, string field, string value, TimeSpan? expiry = null)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return IsPlainText(value)
+            ? Write($"redis HSET {key} {field}", key, expiry, async (db, k, vars, ttl) =>
+            {
+                await db.HashSetAsync(k, vars.ExpandText(field), vars.ExpandText(value));
+                await ExpireAsync(db, k, ttl);
+            })
+            : HashSet(key, field, Json.Parse(value), expiry);
+    }
+
+    private static bool IsPlainText(string value)
+    {
+        var t = value.Trim();
+        if (t.Length == 0)
+            return true;
+        if (t[0] is '{' or '[' or '"' || t is "true" or "false" or "null"
+            || double.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
+            return false;
+        return !(t.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || t.Contains('/') || t.Contains('\\'));
+    }
+
     /// <summary><c>ZADD key score member</c>; the member is text with tokens expanded.</summary>
     public static DelegateStep SortedSetAdd(string key, string member, double score, TimeSpan? expiry = null) =>
         Write($"redis ZADD {key}", key, expiry, async (db, k, vars, ttl) =>
