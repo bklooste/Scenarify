@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+using RedisEvents.Config;
 using RedisEvents.Extensions;
 using RedisEvents.Producer;
 
@@ -19,8 +19,8 @@ namespace Scenarify;
 /// <para>The in-memory RedisEvents doubles cannot feed a service in another container, and the only public
 /// way to get a real publisher is <c>AddStreamPublisher</c>, so this runs a throwaway host holding only publishers.</para>
 /// <para>Partition counts must match the service's or keys hash to different streams and the service sees
-/// nothing. No <c>Streams:Topics</c> config is written unless <c>partitions</c> names the topic, so both sides
-/// share the library default.</para>
+/// nothing. No topic options are set unless <c>partitions</c> names the topic, so both sides share the library
+/// default. Topic names may contain ':' (e.g. <c>bet:core-es</c>).</para>
 /// </remarks>
 public sealed class StreamSender : IAsyncDisposable
 {
@@ -45,7 +45,7 @@ public sealed class StreamSender : IAsyncDisposable
     {
         var list = topics.ToList();
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
-        builder.Configuration.AddInMemoryCollection(StreamConfig.Build(connectionString, list, partitions));
+        StreamConfig.Configure(builder, connectionString, list, partitions);
         foreach (var topic in list)
             builder.AddStreamPublisher(topic);
 
@@ -115,16 +115,49 @@ public sealed class StreamSender : IAsyncDisposable
     }
 }
 
+/// <summary>
+/// Stream wiring shared by <see cref="StreamSender"/> and <see cref="StreamRecorder"/>.
+/// </summary>
+/// <remarks>
+/// <para>Per-topic options are never written as <c>Streams:Topics:{topic}</c> configuration keys: .NET configuration
+/// splits keys on ':', so a topic such as <c>bet:core-es</c> would bind as a nested section and its partition count
+/// would be silently lost (the topic would run on one partition while the service under test runs on more).</para>
+/// <para>Instead they go straight into the <see cref="StreamOptions"/> RedisEvents binds once per builder. A publisher
+/// captures its topic's options when <c>AddStreamPublisher</c> runs, so the options must be in place before any topic
+/// is registered: <see cref="Configure"/> makes RedisEvents bind them first, through an inert state-store
+/// registration that is never resolved (no Redis call, no hosted service), and then fills in the topics.</para>
+/// </remarks>
 internal static class StreamConfig
 {
-    public static Dictionary<string, string?> Build(string connectionString, IEnumerable<string> topics, IReadOnlyDictionary<string, int>? partitions)
+    /// <summary>The topic of the inert registration that makes RedisEvents bind its options. Never resolved.</summary>
+    internal const string BindTopic = "scenarify-options-bind";
+
+    /// <summary>
+    /// Adds <paramref name="settings"/> plus the connection string to <paramref name="builder"/>'s configuration,
+    /// binds RedisEvents' options and sets each partitioned topic's partition count on them, by exact topic name.
+    /// </summary>
+    public static StreamOptions Configure(IHostApplicationBuilder builder, string connectionString, IEnumerable<string> topics,
+        IReadOnlyDictionary<string, int>? partitions, IDictionary<string, string?>? settings = null)
     {
-        var settings = new Dictionary<string, string?> { ["Streams:ConnectionString"] = connectionString };
+        var all = new Dictionary<string, string?>(settings ?? new Dictionary<string, string?>(), StringComparer.OrdinalIgnoreCase)
+        {
+            ["Streams:ConnectionString"] = connectionString,
+        };
+        builder.Configuration.AddInMemoryCollection(all);
+
+        builder.AddStreamStore(BindTopic);
+        var options = builder.Services.LastOrDefault(d => d.ServiceType == typeof(StreamOptions) && !d.IsKeyedService)?.ImplementationInstance as StreamOptions
+            ?? throw new InvalidOperationException("RedisEvents did not register its bound StreamOptions; this RedisEvents version is not supported by Scenarify.Redis.");
+
         foreach (var topic in topics)
         {
-            if (partitions is not null && partitions.TryGetValue(topic, out var count))
-                settings[$"Streams:Topics:{topic}:Partitions"] = count.ToString(CultureInfo.InvariantCulture);
+            if (partitions is null || !partitions.TryGetValue(topic, out var count))
+                continue;
+            if (count < 1)
+                throw new ArgumentOutOfRangeException(nameof(partitions), count, $"Partitions for topic '{topic}' must be >= 1.");
+            var current = options.Topics.TryGetValue(topic, out var existing) ? existing : new TopicOptions();
+            options.Topics[topic] = current with { Partitions = count };
         }
-        return settings;
+        return options;
     }
 }

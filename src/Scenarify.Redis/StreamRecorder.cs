@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
 using RedisEvents.Extensions;
@@ -84,7 +83,7 @@ public sealed class StreamRecorder : IAsyncDisposable
         var list = topics.ToList();
         var recorder = new StreamRecorder(list);
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
-        var settings = StreamConfig.Build(connectionString, list, partitions);
+        var settings = new Dictionary<string, string?>();
         var consumerName = $"test-recorder-{Guid.NewGuid():N}";
         for (var i = 0; i < list.Count; i++)
         {
@@ -94,7 +93,7 @@ public sealed class StreamRecorder : IAsyncDisposable
             settings[$"Streams:Consumers:{i}:Persist"] = "None";
             settings[$"Streams:Consumers:{i}:BatchSize"] = "100";
         }
-        builder.Configuration.AddInMemoryCollection(settings);
+        StreamConfig.Configure(builder, connectionString, list, partitions, settings);
 
         foreach (var topic in list)
         {

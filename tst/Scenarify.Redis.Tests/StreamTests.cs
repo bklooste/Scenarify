@@ -6,6 +6,8 @@ using Microsoft.Extensions.Hosting;
 
 using RedisEvents.Extensions;
 
+using StackExchange.Redis;
+
 using Xunit.Sdk;
 
 namespace XUnitRedisTests;
@@ -89,6 +91,35 @@ public class StreamTests(Containers containers)
             return Task.CompletedTask;
         }, Wait);
         await consumer.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task a_colon_topic_gets_its_configured_partition_count_on_sender_and_recorder()
+    {
+        // .NET configuration splits keys on ':', so a Streams:Topics:{topic}:Partitions key for this topic would be
+        // lost and both sides would silently fall back to one partition.
+        var topic = $"scenarify:colon-{Guid.NewGuid():N}";
+        var partitions = new Dictionary<string, int> { [topic] = 3 };
+        var ct = TestContext.Current.CancellationToken;
+        await using var recorder = await StreamRecorder.StartAsync(containers.RedisConnection, [topic], partitions, ct);
+        await using var sender = await StreamSender.StartAsync(containers.RedisConnection, [topic], partitions, ct);
+
+        var keys = Enumerable.Range(0, 30).Select(_ => Guid.NewGuid().ToString()).ToList();
+        foreach (var key in keys)
+            await sender.PublishJsonAsync(topic, $"{{\"id\":\"{key}\"}}", "Colon", partitionKey: key, ct: ct);
+
+        // Sender: 30 keys hash over all three partition streams (a miss is ~1e-5 likely).
+        await using var redisConnection = await ConnectionMultiplexer.ConnectAsync(containers.RedisConnection);
+        var streams = redisConnection.GetServers()[0].Keys(pattern: $"*s:{{{topic}}}:*").Select(k => k.ToString()).Order().ToList();
+        Assert.Equal(3, streams.Count);
+        Assert.Equal(["0", "1", "2"], streams.Select(s => s[(s.LastIndexOf(':') + 1)..]));
+
+        // Recorder: it reads all three partitions, so it sees every message, not only partition 0's share.
+        await Eventually.Assert(() =>
+        {
+            Assert.Equal(keys.Order(), recorder.Messages(topic).Select(m => m.PartitionKey).Order());
+            return Task.CompletedTask;
+        }, Wait);
     }
 
     [Fact]
