@@ -4,6 +4,16 @@ Every push to `main` publishes a new patch version automatically (see `version.j
 not manually tagged), so not every version number gets its own entry here. This file tracks what
 actually changed.
 
+## 2026-11-06
+
+### Fixed
+
+- `StreamSender` / `StreamRecorder` (Scenarify.Redis): a `partitions` entry for a topic whose name contains ':'
+  (e.g. `bet:core-es`) was silently dropped and the topic ran on one partition, because the count was written as a
+  `Streams:Topics:{topic}:Partitions` config key and .NET configuration splits keys on ':'. Per-topic options are now
+  set on RedisEvents' bound `StreamOptions` in code, keyed by the exact topic name, so any topic name works. Public
+  API unchanged.
+
 ## 2026-10-16
 
 ### Added
