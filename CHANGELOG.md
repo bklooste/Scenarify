@@ -4,6 +4,14 @@ Every push to `main` publishes a new patch version automatically (see `version.j
 not manually tagged), so not every version number gets its own entry here. This file tracks what
 actually changed.
 
+## 2026-11-08
+
+### Changed
+
+- Scenarify.Redis depends on RedisEvents 0.2.48 (was 0.2.46). 0.2.48 adds `STREAMS_HASH_TAG`; a test project that
+  resolved RedisEvents through Scenarify.Redis alone stayed on 0.2.46, ignored `STREAMS_HASH_TAG=false` and published
+  to braced `{topic}` keys that braceless services never read.
+
 ## 2026-11-06
 
 ### Fixed
