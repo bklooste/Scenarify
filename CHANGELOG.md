@@ -49,6 +49,15 @@ actually changed.
   Why: shared env files (e.g. lode's `config/*.env`) move app-wide defaults from `DOTNET_` to `GLOBAL_` so they no
   longer beat per-service settings; test fixtures must read them the same way the services do.
 
+## 2026-11-10
+
+### Added
+
+- `ServiceTestOptions.ResetMockServerOnStart` (default `true`, so behaviour is unchanged). Set it `false` when several
+  fixtures share one MockServer, as xUnit collections running in parallel do: each fixture's start-up reset wiped the
+  expectations another collection's tests had just set. Scenario tests isolate by unique paths, and
+  `ClearPathAsync` remains for a test that needs a clean path.
+
 ## 2026-10-04 (later)
 
 ### Changed

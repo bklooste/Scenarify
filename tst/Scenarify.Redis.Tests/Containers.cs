@@ -87,3 +87,11 @@ public sealed class MockBackedFixture(string mockUrl, string redis, string? keyP
 });
 
 public sealed record OrderPlaced(string OrderId, string CustomerId, decimal Amount, string[] Items);
+
+// A second fixture on the collection's MockServer that must not wipe what the first one's tests set up.
+public sealed class NoResetFixture(string mockUrl) : ServiceTestFixture(new ServiceTestOptions
+{
+    MockServer = true,
+    ResetMockServerOnStart = false,
+    Config = new Dictionary<string, string?> { [BaseUrlKey] = mockUrl, [MockServerUrlKey] = mockUrl },
+});

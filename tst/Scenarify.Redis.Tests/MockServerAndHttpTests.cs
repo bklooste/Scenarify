@@ -235,6 +235,24 @@ public class MockServerAndHttpTests(Containers containers)
     }
 
     [Fact]
+    public async Task fixture_with_reset_off_keeps_existing_expectations_and_requests()
+    {
+        await fixture.Scenario()
+            .Given(Mock.Get("/keep/{{customerId}}", """{ "kept": true }"""))
+            .Given(Http.Get("keep/{{customerId}}"))
+            .Given(async _ =>
+            {
+                var other = new NoResetFixture(containers.MockUrl);
+                await other.InitializeAsync();
+                await other.DisposeAsync();
+            })
+            .When(Http.Get("keep/{{customerId}}"))
+            .ThenBody("""{ "kept": true }""")
+            .Then(Mock.Received("GET", "/keep/{{customerId}}", times: 2))
+            .RunAsync();
+    }
+
+    [Fact]
     public async Task when_concurrently_sends_all_steps()
     {
         await fixture.Scenario()

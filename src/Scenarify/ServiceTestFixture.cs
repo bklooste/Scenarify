@@ -23,8 +23,15 @@ public interface IFixtureFeature : IAsyncDisposable
 /// <summary>Everything a <see cref="ServiceTestFixture"/> needs to know about the service under test.</summary>
 public sealed record ServiceTestOptions
 {
-    /// <summary>Initialise MockServer: wait for it, reset it once, load <see cref="MockServerFiles"/>.</summary>
+    /// <summary>Initialise MockServer: wait for it, reset it once (see <see cref="ResetMockServerOnStart"/>), load <see cref="MockServerFiles"/>.</summary>
     public bool MockServer { get; init; }
+
+    /// <summary>
+    /// Reset MockServer when the fixture starts (default). Set false when several fixtures — xUnit collections running
+    /// in parallel — share one MockServer: a second fixture's reset would wipe expectations the first one's tests just
+    /// set. Scenario tests isolate by unique paths, so a MockServer that starts empty with its container needs no reset.
+    /// </summary>
+    public bool ResetMockServerOnStart { get; init; } = true;
 
     /// <summary>Expectation files loaded before the health wait (some services call dependencies at startup).</summary>
     public IReadOnlyList<string> MockServerFiles { get; init; } = [];
@@ -227,7 +234,8 @@ public abstract class ServiceTestFixture : IAsyncLifetime
             var client = new MockServerClient(url.DnsSafeHost, url.Port);
             Log($"Waiting for MockServer at {url}");
             await client.WaitUntilReadyAsync(Options.StartupTimeout);
-            await client.ResetAsync();
+            if (Options.ResetMockServerOnStart)
+                await client.ResetAsync();
             foreach (var file in Options.MockServerFiles)
                 await client.LoadExpectationsAsync(Json.File(file), NewVariables(), mockCts.Token);
             mockServer = client;
